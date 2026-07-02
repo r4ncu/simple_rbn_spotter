@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RBN Spotter</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{--bg:#111111;--bg2:#111111;--text:#e0e0e0;--text2:#888;--text3:#666;--text4:#9e9e9e;--border:#333;--border2:#222;--accent:#2196f3;--accent-hover:#1976d2;--accent-bg:rgba(33,150,243,0.08);--link:#888}
+[data-theme="light"]{--bg:#f5f5f5;--bg2:#ffffff;--text:#222;--text2:#666;--text3:#999;--text4:#555;--border:#ddd;--border2:#e5e5e5;--accent:#1976d2;--accent-hover:#1565c0;--accent-bg:rgba(25,118,210,0.08);--link:#555}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;max-width:860px;margin:0 auto}
+
+.top{display:flex;gap:12px;align-items:center;padding:8px 16px;margin:12px 0;background:var(--bg)}
+.top .inp{flex:1;min-width:0;padding:8px 12px;border:1px solid var(--border);border-radius:4px;background:var(--bg2);color:var(--text);font-size:16px;font-weight:700;text-transform:uppercase;outline:none}
+.top .inp:focus{border-color:var(--accent)}
+.top .btn-search{padding:8px 40px;border:none;border-radius:4px;background:var(--accent);color:white;font-size:16px;font-weight:700;cursor:pointer;white-space:nowrap}
+.top .btn-search:hover{background:var(--accent-hover)}
+.top .status{display:none}
+
+.page-header{padding:16px 16px 0;margin-bottom:12px}
+.page-header-left{position:relative}
+.page-header-left h1{font-size:18px;color:var(--text);font-weight:700;margin-bottom:4px}
+.page-header-left p{font-size:13px;color:var(--text2);line-height:1.6}
+.page-header-left .time-select{background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:13px;padding:1px 4px;cursor:pointer;outline:none}
+.page-header-left .time-select:focus{border-color:var(--accent)}
+.page-header .theme-toggle{position:absolute;top:0;right:0}
+.theme-toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;font-size:13px;color:var(--text2)}
+.theme-toggle input{display:none}
+.theme-toggle .slider{width:72px;height:36px;background:#1a1a2e;border-radius:18px;position:relative;transition:background .3s;border:2px solid #333}
+.theme-toggle .slider::after{content:"";position:absolute;top:3px;left:3px;width:26px;height:26px;background:#b3b3b3;border-radius:50%;transition:transform .3s,background .3s}
+.theme-toggle .slider .icon-dark{position:absolute;top:7px;right:12px;font-size:16px;line-height:1;color:#ffd700;pointer-events:none}
+.theme-toggle .slider .icon-light{position:absolute;top:50%;left:11px;transform:translateY(-50%);font-size:20px;line-height:1;color:#f59e0b;pointer-events:none;display:none}
+.theme-toggle input:checked+.slider{background:#e8e8e8;border-color:#ccc}
+.theme-toggle input:checked+.slider::after{transform:translateX(36px);background:#808080}
+.theme-toggle input:checked+.slider .icon-dark{display:none}
+.theme-toggle input:checked+.slider .icon-light{display:block}
+
+.status-bar{padding:0 16px;font-size:13px;color:var(--text2);display:flex;align-items:center;gap:4px;margin:12px 0;flex-wrap:wrap}
+.band-item{cursor:pointer;user-select:none;transition:opacity .2s}
+.band-item.disabled{opacity:0.3}
+
+.table-wrap{overflow-x:auto;padding:0 16px 8px}
+table{width:100%;border-collapse:separate;border-spacing:0;font-size:14px;margin-top:4px}
+th{background:var(--bg);color:var(--text4);padding:8px 12px;text-align:left;position:sticky;top:0;white-space:nowrap;border-bottom:0.5px solid var(--text4);overflow:hidden;text-overflow:ellipsis}
+th.col-heard{padding-left:0}
+th.th-right{text-align:right}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--accent)}
+th .sort-icon{margin-left:4px;font-size:10px;opacity:0.4}
+th.sort-active .sort-icon{opacity:1;color:var(--accent)}
+td{padding:8px 12px;border-bottom:1px solid var(--border2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.col-heard{min-width:140px;background:var(--bg);padding-left:0!important}
+.col-qrb{min-width:90px}
+.col-freq{min-width:100px;padding-right:0!important;text-align:right!important}
+.col-snr{min-width:80px}
+.col-time{min-width:80px}
+tr:hover td{background:var(--accent-bg)}
+.heard-cs{color:var(--text);font-weight:700}
+.freq{color:var(--text);text-align:right}
+.dist{color:var(--text);text-align:right}
+.snr{color:var(--text);text-align:right;font-weight:700}
+.snr-strong{color:#4caf50}
+.snr-ok{color:#eab308}
+.snr-weak{color:#f97316}
+.flag{width:20px;height:14px;vertical-align:middle;margin-right:4px;border-radius:2px}
+.time{color:var(--text);text-align:right}
+.time-date{color:var(--text3);margin-left:4px}
+.no-spots{text-align:left;padding:0;color:var(--text2);font-size:13px}
+.no-spots a{color:var(--link);text-decoration:none}
+.no-spots a:hover{color:var(--accent);text-decoration:underline}
+#map-section{padding:0 16px 0;margin-bottom:12px}
+#map{width:100%;height:450px;border-radius:8px;border:1px solid var(--border)}
+.leaflet-control-attribution{font-size:9px!important;opacity:0.4}
+.leaflet-control-attribution a:first-child{display:none}
+.leaflet-control-zoom a{opacity:0.4}
+.pulse{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes spot-highlight{0%{background:rgba(33,150,243,0.25)}100%{background:transparent}}
+tr.spot-new td{animation:spot-highlight 4s ease-out}
+
+@media(max-width:600px){
+  .top{padding:8px 16px}
+  .top .inp{padding:8px}
+  .top .btn-search{padding:8px 20px;font-size:14px}
+  #map{height:330px}
+  table{font-size:12px}
+  th{padding:6px 6px;white-space:normal;line-height:1.3}
+  td{padding:6px 6px}
+  .col-heard{min-width:110px}
+  .col-qrb{min-width:55px}
+  .col-freq{min-width:70px}
+  .col-snr{min-width:50px}
+  .col-time{min-width:55px}
+  .flag{width:16px;height:11px;margin-right:2px}
+}
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Simple RBN Spotter <span style="opacity:0.3">by R4NCU</span></h1>
+    <label class="theme-toggle">
+      <input type="checkbox" id="theme-switch">
+      <span class="slider">
+        <span class="icon-dark">&#9790;</span>
+        <span class="icon-light">&#9728;</span>
+      </span>
+    </label>
+    <p>
+      Кого услышал <select class="time-select" id="time-range"><option value="300">5 минут</option><option value="900">15 минут</option><option value="1800">30 минут</option><option value="3600" selected>час</option><option value="21600">6 часов</option><option value="43200">12 часов</option><option value="86400">24 часа</option></select>. Обновление раз в 5 сек<br>
+      SNR: <span style="color:#4caf50">≥20 дБ</span> · <span style="color:#eab308">≥10 дБ</span> · <span style="color:#f97316">≥0 дБ</span>
+    </p>
+  </div>
+</div>
+
+<div id="map-section">
+  <div id="map"></div>
+</div>
+
+<div class="top">
+  <input class="inp" type="text" id="callsign" placeholder="Позывной споттера" maxlength="12" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="characters" inputmode="text" autofocus>
+  <button class="btn-search" onclick="startSearch()">Поиск</button>
+</div>
+
+<div class="status-bar">
+  <span id="status-text"></span>
+</div>
+
+<div class="table-wrap">
+  <div class="no-spots" id="no-spots">Введите позывной споттера и нажмите «Поиск»</div>
+  <table id="spots-table" style="display:none">
+    <thead>
+      <tr>
+        <th class="col-heard">Heard</th>
+        <th class="sortable th-right col-qrb" data-sort="dist">QRB,<br>km <span class="sort-icon">⇅</span></th>
+        <th class="sortable th-right col-snr" data-sort="snr">SNR,<br>дБ <span class="sort-icon">⇅</span></th>
+        <th class="sortable th-right col-time" data-sort="time">Time<br>&nbsp;<span class="sort-icon">⇅</span></th>
+        <th class="col-freq" style="text-align:right">Freq</th>
+      </tr>
+    </thead>
+    <tbody id="spots-body"></tbody>
+  </table>
+</div>
+
+<div style="padding:0 16px 24px">
+  <a href="https://github.com/r4ncu/simple_rbn" target="_blank" style="font-size:12px;color:var(--text3);text-decoration:none">https://github.com/r4ncu/simple_rbn</a>
+</div>
+
+<script>
+const API = "/api/spots";
+const HASH = "7fb810";
+const REFRESH_MS = 5000;
+
+let polling = false;
+let timer = null;
+let lastId = 0;
+let spots = {};
+let callInfo = {};
+let maxAgeSec = 3600;
+let maxRows = 9999;
+let sortField = null;
+let sortDir = 1;
+let currentBands = "";
+let allBands = [];
+let disabledBands = new Set();
+
+let currentBounds = null;
+let autoFit = true;
+let fittingBounds = false;
+let openPopup = null;
+let updatingLayers = false;
+let currentPopupMarker = null;
+let knownIds = new Set();
+
+const DARK_TILES = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const LIGHT_TILES = "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
+let tileLayer = null;
+let currentTheme = localStorage.getItem("rbn-spotter-theme") || "dark";
+
+function applyTheme(theme) {
+  currentTheme = theme;
+  document.documentElement.setAttribute("data-theme", theme);
+  $("theme-switch").checked = theme === "light";
+  localStorage.setItem("rbn-spotter-theme", theme);
+  if (tileLayer) {
+    const url = theme === "light" ? LIGHT_TILES : DARK_TILES;
+    tileLayer.setUrl(url);
+  }
+}
+
+function applyFitBounds() {
+  if (autoFit && currentBounds && map) {
+    fittingBounds = true;
+    map.invalidateSize();
+    map.fitBounds(currentBounds, {padding: [0, 0], animate: false});
+    fittingBounds = false;
+  }
+}
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(applyFitBounds, 100);
+});
+
+const $ = s => document.getElementById(s);
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function snrClass(db) {
+  if (db >= 20) return "snr-strong";
+  if (db >= 10) return "snr-ok";
+  return "snr-weak";
+}
+
+function callsignPrefix(callsign) {
+  const up = callsign.toUpperCase();
+  const m = up.match(/^(\d?[A-Z]+)/);
+  if (!m) return up.replace(/[^A-Z0-9]/g, "").slice(0, 2);
+  return m[1].slice(0, 2);
+}
+
+function flagUrl(callsign) {
+  if (!callsign) return "";
+  const pfx = callsignPrefix(callsign);
+  let iso = PREFIX_TO_ISO[pfx];
+  if (!iso && pfx.length === 2) iso = PREFIX_TO_ISO[pfx[0]];
+  if (!iso) return "";
+  return "https://flagcdn.com/w40/" + iso + ".png";
+}
+
+const PREFIX_TO_ISO = {
+  "A2":"bw","A3":"to","A4":"om","A5":"bt","A6":"ae","A7":"qa","A8":"lr","A9":"bh",
+  "B":"cn",
+  "C3":"ad","C4":"cy","C5":"gm","C6":"bs","C8":"mz","C9":"mz",
+  "CE":"cl","CF":"ca","CG":"ca","CH":"ca","CI":"ca","CJ":"ca","CK":"ca","CL":"ca","CM":"ca","CN":"ma","CO":"cu","CP":"bo","CQ":"pt","CR":"pt","CS":"pt","CT":"pt","CU":"pt","CV":"uy","CW":"aw","CX":"uy","CY":"ca","CZ":"ca",
+  "D":"de",
+  "DA":"de","DB":"de","DC":"de","DD":"de","DE":"de","DF":"de","DG":"de","DH":"de","DI":"de","DJ":"de","DK":"de","DL":"de","DM":"de","DN":"de","DO":"de","DP":"de","DQ":"de","DR":"de","DS":"kr","DT":"kr","DU":"ph","DV":"ph","DW":"ph","DX":"ph","DY":"ph","DZ":"ph",
+  "D2":"ao","D3":"ao","D4":"cv","D6":"km",
+  "E":"es",
+  "EA":"es","EB":"es","EC":"es","ED":"es","EE":"es","EF":"es","EG":"es","EH":"es",
+  "EJ":"ie","EI":"ie",
+  "EK":"am","EL":"lr","EM":"ua","EN":"ua","EO":"ua","EP":"ir","EQ":"ir",
+  "ER":"md","ES":"ee","ET":"et","EU":"by","EV":"by","EW":"by","EX":"kg","EY":"tj","EZ":"tm",
+  "E2":"th","E3":"er","E4":"ps",
+  "F":"fr",
+  "FA":"fr","FB":"fr","FC":"fr","FD":"fr","FE":"fr","FF":"fr","FG":"fr","FH":"fr","FI":"fr","FJ":"fr","FK":"nc","FL":"fr","FM":"fr","FN":"fr","FO":"pf","FP":"ca","FQ":"fr","FR":"fr","FS":"fr","FT":"fr","FU":"fr","FV":"fr","FW":"fr","FX":"fr","FY":"fr","FZ":"fr",
+  "G":"gb",
+  "H":"hu",
+  "HA":"hu","HB":"ch","HC":"ec","HD":"ec","HE":"ch","HF":"pl","HG":"hu","HH":"ht","HI":"do","HJ":"co","HK":"co","HL":"kr","HM":"kp","HN":"iq","HO":"ni","HP":"pa","HQ":"hn","HR":"hn","HS":"th","HT":"ni","HU":"sv","HV":"va","HW":"fr","HX":"fr","HY":"fr","HZ":"sa",
+  "H2":"cy","H3":"pa","H4":"sb","H6":"ni","H7":"ni","H8":"pa","H9":"pa",
+  "I":"it",
+  "J":"jp",
+  "JA":"jp","JB":"jp","JC":"jp","JD":"jp","JE":"jp","JF":"jp","JG":"jp","JH":"jp","JI":"jp","JJ":"jp","JK":"jp","JL":"jp","JM":"jp","JN":"jp","JO":"jp","JP":"jp","JQ":"jp","JR":"jp","JS":"jp",
+  "JT":"mn","JU":"mn","JV":"mn","JW":"no","JX":"no","JY":"jo","JZ":"id",
+  "J2":"dj","J3":"gd","J4":"gr","J5":"gw","J6":"lc","J7":"dm","J8":"vc",
+  "K":"us","KA":"us","KB":"us","KC":"us","KD":"us","KE":"us","KF":"us","KG":"us","KH":"us","KI":"us","KJ":"us","KK":"us","KL":"us","KM":"us","KN":"us","KO":"us","KP":"us","KQ":"us","KR":"us","KS":"us","KT":"us","KU":"us","KV":"us","KW":"us","KX":"us","KY":"us","KZ":"us",
+  "L":"ar",
+  "LA":"no","LB":"no","LC":"ni","LD":"dk","LE":"se","LF":"fr","LG":"fr","LH":"fr","LI":"no","LJ":"no","LK":"no","LL":"no","LM":"no","LN":"ro","LO":"ar","LP":"ar","LQ":"ar","LR":"ar","LS":"ar","LT":"ar","LU":"ar","LV":"ar","LW":"ar","LX":"lu","LY":"lt","LZ":"bg",
+  "L2":"ar","L3":"ar","L4":"ar","L5":"ar","L6":"ar","L7":"ar","L8":"ar","L9":"ar",
+  "M":"gb","MA":"gb","MB":"gb","MC":"gb","MD":"gb","ME":"gb","MF":"gb","MG":"gb","MH":"gb","MI":"gb","MJ":"gb","MK":"gb","ML":"gb","MM":"gb","MN":"gb","MO":"gb","MP":"gb","MQ":"gb","MR":"gb","MS":"gb","MT":"gb","MU":"gb","MV":"gb","MW":"gb","MX":"gb","MY":"gb","MZ":"gb",
+  "N":"us","NA":"us","NB":"us","NC":"us","ND":"us","NE":"us","NF":"us","NG":"us","NH":"us","NI":"us","NJ":"us","NK":"us","NL":"us","NM":"us","NN":"us","NO":"us","NP":"us","NQ":"us","NR":"us","NS":"us","NT":"us","NU":"us","NV":"us","NW":"us","NX":"us","NY":"us","NZ":"us",
+  "O":"dk",
+  "OA":"pe","OB":"pe","OC":"pe","OD":"lb","OE":"at","OF":"fi","OG":"fi","OH":"fi","OI":"fi","OJ":"fi","OK":"cz","OL":"cz","OM":"sk","ON":"be","OO":"be","OP":"be","OQ":"be","OR":"be","OS":"be","OT":"be","OU":"dk","OV":"dk","OW":"dk","OX":"dk","OY":"dk","OZ":"dk",
+  "P":"nl",
+  "PA":"nl","PB":"nl","PC":"nl","PD":"nl","PE":"nl","PF":"nl","PG":"nl","PH":"nl","PI":"nl","PJ":"cw","PK":"id","PL":"id","PM":"id","PN":"id","PO":"id","PP":"br","PQ":"br","PR":"br","PS":"br","PT":"br","PU":"br","PV":"br","PW":"br","PX":"br","PY":"br","PZ":"sr",
+  "P2":"pg","P3":"cy","P4":"aw","P5":"kp",
+  "R":"ru",
+  "RA":"ru","RB":"ru","RC":"ru","RD":"ru","RE":"ru","RG":"ru","RH":"ru","RI":"ru","RJ":"ru","RK":"ru","RL":"ru","RM":"ru","RN":"ru","RO":"ru","RP":"ru","RQ":"ru","RR":"ru","RS":"ru","RU":"ru","RV":"ru","RW":"ru","RX":"ru","RY":"ru","RZ":"ru",
+  "S":"se",
+  "SA":"se","SB":"se","SC":"se","SD":"se","SE":"se","SF":"se","SG":"se","SH":"se","SI":"se","SJ":"se","SK":"se","SL":"se","SM":"se","SN":"pl","SO":"pl","SP":"pl","SQ":"pl","SR":"pl","SS":"eg","ST":"sd","SU":"eg","SV":"gr","SW":"se","SX":"se","SY":"se","SZ":"se",
+  "S2":"bd","S5":"si","S6":"sg","S7":"sc","S8":"za","S9":"st",
+  "S0":"eh","S3":"bd","S4":"za",
+  "T":"tr",
+  "TA":"tr","TB":"tr","TC":"tr","TD":"hn","TE":"cr","TF":"is","TG":"gt","TH":"fr","TI":"cr","TJ":"cm","TK":"fr","TL":"car","TM":"fr","TN":"cg","TO":"fr","TP":"fr","TQ":"fr","TR":"ga","TS":"tn","TT":"td","TU":"ci","TV":"fr","TW":"fr","TX":"fr","TY":"bj","TZ":"ml",
+  "T2":"tv","T3":"ki","T5":"so","T6":"af","T7":"sm","T8":"pw","T9":"ba",
+  "U":"ru",
+  "UA":"ru","UB":"ru","UC":"ru","UD":"ru","UE":"ru","UF":"ru","UG":"ru","UH":"ru","UI":"ru","UJ":"ru","UK":"uz","UL":"ru","UM":"ru","UN":"kz","UO":"ru","UP":"ru","UQ":"ru","UR":"ua","US":"ua","UT":"ua","UU":"ua","UV":"ua","UW":"ua","UX":"ua","UY":"ua","UZ":"ua",
+  "V":"ca",
+  "VA":"ca","VB":"ca","VC":"ca","VD":"ca","VE":"ca","VF":"ca","VG":"ca","VH":"au","VI":"au","VJ":"au","VK":"au","VL":"au","VM":"au","VN":"au","VO":"ca","VP":"gb","VQ":"gb","VR":"hk","VS":"gb","VT":"in","VU":"in","VV":"in","VW":"in","VX":"ca","VY":"ca",
+  "V2":"ag","V3":"bz","V4":"kn","V5":"na","V6":"fm","V7":"mh","V8":"bn",
+  "W":"us","WA":"us","WB":"us","WC":"us","WD":"us","WE":"us","WF":"us","WG":"us","WH":"us","WI":"us","WJ":"us","WK":"us","WL":"us","WM":"us","WN":"us","WO":"us","WP":"us","WQ":"us","WR":"us","WS":"us","WT":"us","WU":"us","WV":"us","WW":"us","WX":"us","WY":"us","WZ":"us",
+  "X":"mx",
+  "XA":"mx","XB":"mx","XC":"mx","XD":"mx","XE":"mx","XF":"mx","XG":"mx","XH":"mx","XI":"mx","XJ":"ca","XK":"ca","XL":"ca","XM":"ca","XN":"ca","XO":"ca","XP":"dk","XQ":"cl","XR":"cl","XS":"cn","XT":"bf","XU":"kh","XV":"vn","XW":"la","XX":"kh","XY":"mm","XZ":"mm",
+  "Y":"af",
+  "YA":"af","YB":"id","YC":"id","YD":"id","YE":"id","YF":"id","YG":"id","YH":"id","YI":"iq","YJ":"vu","YK":"sy","YL":"lv","YM":"tr","YN":"ni","YO":"ro","YP":"fr","YQ":"fr","YR":"ro","YS":"sv","YT":"rs","YU":"rs","YV":"ve","YW":"fr","YX":"fr","YY":"ca","YZ":"rs",
+  "Z":"gb",
+  "ZA":"al","ZB":"gi","ZC":"cy","ZD":"al","ZE":"zm","ZF":"ky","ZG":"de","ZH":"de","ZI":"de","ZJ":"ca","ZK":"nz","ZL":"nz","ZM":"nz","ZN":"nz","ZO":"nz","ZP":"py","ZQ":"nz","ZR":"br","ZS":"za","ZT":"nz","ZU":"za","ZV":"br","ZW":"br","ZX":"br","ZY":"br","ZZ":"br",
+  "Z2":"zw","Z3":"mk",
+  "2E":"gb","2A":"gb","2B":"gb","2C":"gb","2J":"gb",
+  "3A":"mc","3B":"mu","3C":"gn","3D":"sz","3E":"fi","3F":"fi","3G":"cl","3H":"cn","3I":"cn","3J":"cn","3K":"cn","3L":"cn","3M":"cn","3N":"cn","3O":"cn","3P":"cn","3Q":"cn","3R":"cn","3S":"cn","3T":"cn","3U":"cn","3V":"tn","3W":"vn","3X":"gn","3Y":"no","3Z":"pl",
+  "4A":"mx","4B":"mx","4C":"mx","4D":"ph","4E":"ph","4F":"ph","4G":"ph","4H":"ph","4I":"ph","4J":"az","4K":"az","4L":"ge","4M":"ve","4N":"un","4O":"me","4P":"lk","4Q":"lk","4R":"lk","4S":"lk","4T":"pe","4U":"un","4V":"ht","4W":"tl","4X":"il","4Y":"icao","4Z":"il",
+  "5A":"ly","5B":"cy","5C":"ma","5D":"ma","5E":"ma","5F":"ma","5G":"ma","5H":"tz","5I":"tz","5J":"co","5K":"co","5L":"lr","5M":"lr","5N":"ng","5O":"ng","5P":"dk","5Q":"dk","5R":"mg","5S":"mg","5T":"mr","5U":"ne","5V":"tg","5W":"ws","5X":"ug","5Y":"ke","5Z":"ke",
+  "6A":"eg","6B":"eg","6C":"sy","6D":"mx","6E":"mx","6F":"mx","6G":"mx","6H":"mx","6I":"mx","6J":"mx","6K":"kr","6L":"kr","6M":"kr","6N":"kr","6O":"so","6P":"pk","6Q":"pk","6R":"pk","6S":"pk","6T":"sd","6U":"sd","6V":"sn","6W":"sn","6X":"mg","6Y":"jm","6Z":"lr",
+  "7A":"id","7B":"id","7C":"id","7D":"id","7E":"id","7F":"id","7G":"id","7H":"id","7I":"id","7J":"jp","7K":"jp","7L":"jp","7M":"jp","7N":"jp","7O":"ye","7P":"ls","7Q":"mw","7R":"dz","7S":"se","7T":"dz","7U":"dz","7V":"dz","7W":"dz","7X":"dz","7Y":"dz","7Z":"sa",
+  "8A":"id","8B":"id","8C":"id","8D":"id","8E":"id","8F":"id","8G":"id","8H":"id","8I":"id","8J":"jp","8K":"jp","8L":"jp","8M":"jp","8N":"jp","8O":"bw","8P":"bb","8Q":"mv","8R":"gy","8S":"se","8T":"in","8U":"in","8V":"in","8W":"in","8Y":"in","8Z":"sa",
+  "9A":"hr","9B":"mu","9C":"gn","9D":"sz","9E":"et","9F":"et","9G":"gh","9H":"mt","9I":"zm","9J":"zm","9K":"kw","9L":"sl","9M":"my","9N":"np","9O":"cd","9P":"cd","9Q":"cd","9R":"cd","9S":"cd","9T":"cd","9U":"bi","9V":"sg","9W":"my","9X":"rw","9Y":"tt","9Z":"tt"
+};
+
+let map = null;
+let mapLayer = null;
+
+const BAND_COLORS = {
+  "630M":"#aaaaaa","160M":"#ffe000","80M":"#2e7d32","60M":"#8a5a2a","40M":"#ffa500","30M":"#ff0000",
+  "20M":"#800080","17M":"#2962ff","15M":"#4caf50","12M":"#03ffff","10M":"#ff00ff",
+  "6M":"#ffc1cb","4M":"#a276ff","2M":"#92ff7f"
+};
+
+function freqToBand(freqKhz) {
+  const f = parseFloat(freqKhz);
+  if (isNaN(f)) return "OTHR";
+  if (f < 500) return "630M";
+  if (f < 2000) return "160M";
+  if (f < 4000) return "80M";
+  if (f < 5500) return "60M";
+  if (f < 8000) return "40M";
+  if (f < 11000) return "30M";
+  if (f < 15000) return "20M";
+  if (f < 19000) return "17M";
+  if (f < 22000) return "15M";
+  if (f < 26000) return "12M";
+  if (f < 30000) return "10M";
+  if (f < 54000) return "6M";
+  if (f < 80000) return "4M";
+  if (f < 150000) return "2M";
+  return "70CM";
+}
+
+function initMap() {
+  if (map) { map.remove(); map = null; }
+  map = L.map("map", {preferCanvas: true, zoomControl: true}).setView([58.33, 49.75], 3);
+  const url = currentTheme === "light" ? LIGHT_TILES : DARK_TILES;
+  tileLayer = L.tileLayer(url, {
+    attribution: "&copy; OSM &copy; CARTO",
+    maxZoom: 18
+  }).addTo(map);
+  mapLayer = L.layerGroup().addTo(map);
+  map.on("zoom movestart", () => { if (!fittingBounds) autoFit = false; });
+  map.on("popupopen", (e) => { currentPopupMarker = e.popup._source; });
+  map.on("popupclose", () => { if (!fittingBounds && !updatingLayers) { openPopup = null; currentPopupMarker = null; } });
+}
+
+function updateMap() {
+  const cs = $("callsign").value.trim().toUpperCase();
+  const spotterInfo = callInfo[cs];
+  const sLat = spotterInfo ? parseFloat(spotterInfo[6]) : null;
+  const sLon = spotterInfo ? parseFloat(spotterInfo[7]) : null;
+
+  const now = Date.now() / 1000;
+  const filtered = Object.entries(spots).filter(([id, s]) => (now - s[10]) < maxAgeSec);
+
+  const bandCounts = {};
+  const activeBands = new Set();
+  const points = [];
+
+  if (sLat !== null && sLon !== null) {
+    points.push([sLat, sLon]);
+  }
+
+  filtered.forEach(([id, s]) => {
+    const info = callInfo[s[2]] || [];
+    const lat = parseFloat(info[6]);
+    const lon = parseFloat(info[7]);
+    if (!isNaN(lat) && !isNaN(lon)) points.push([lat, lon]);
+    activeBands.add(freqToBand(s[1]));
+  });
+
+  allBands = [...activeBands].sort();
+
+  if (!map) initMap();
+
+  if (currentPopupMarker && currentPopupMarker._popup && currentPopupMarker._popup.isOpen()) {
+    const ll = currentPopupMarker.getLatLng();
+    openPopup = {lat: ll.lat, lng: ll.lng, content: currentPopupMarker._popup.getContent()};
+  } else {
+    openPopup = null;
+  }
+
+  updatingLayers = true;
+  mapLayer.clearLayers();
+  updatingLayers = false;
+
+  if (sLat !== null && sLon !== null) {
+    const myIcon = L.divIcon({
+      className: "",
+      html: '<div style="width:12px;height:12px;background:#facc15;border:2px solid #fff;border-radius:50%;box-shadow:0 0 6px rgba(0,0,0,0.5);"></div>',
+      iconSize: [12, 12], iconAnchor: [6, 6]
+    });
+    L.marker([sLat, sLon], {icon: myIcon, zIndexOffset: 1000}).addTo(mapLayer).bindPopup("<b>" + cs + "</b>" + (countryRu(cs) ? " <span style='color:#888;font-size:12px'>(" + countryRu(cs) + ")</span>" : ""));
+  }
+
+  filtered.forEach(([id, s]) => {
+    const [de, freq, dx] = s;
+    const info = callInfo[dx] || [];
+    const lat = parseFloat(info[6]);
+    const lon = parseFloat(info[7]);
+    if (isNaN(lat) || isNaN(lon)) return;
+
+    const band = freqToBand(freq);
+    if (disabledBands.has(band)) return;
+    const color = BAND_COLORS[band] || "#888";
+    bandCounts[band] = (bandCounts[band] || 0) + 1;
+
+    if (sLat !== null && sLon !== null) {
+      L.polyline([[sLat, sLon], [lat, lon]], {color: color, weight: 1.4, opacity: 0.35}).addTo(mapLayer);
+    }
+
+    const icon = L.divIcon({
+      className: "",
+      html: '<div style="width:7px;height:7px;background:' + color + ';border:1px solid rgba(255,255,255,0.3);border-radius:50%;"></div>',
+      iconSize: [7, 7], iconAnchor: [3.5, 3.5]
+    });
+    L.marker([lat, lon], {icon}).addTo(mapLayer).bindPopup("<b>" + dx + "</b>" + (countryRu(dx) ? " <span style='color:#888;font-size:12px'>(" + countryRu(dx) + ")</span>" : "") + "<br>" + freq + " kHz · " + band + "<br>SNR: " + s[3] + " дБ<br>" + formatTime(s[10]) + " UTC<br>" + formatDate(s[10]));
+  });
+
+  if (openPopup) {
+    map.eachLayer(layer => {
+      if (layer instanceof L.Marker && layer.getLatLng) {
+        const ll = layer.getLatLng();
+        if (Math.abs(ll.lat - openPopup.lat) < 0.0001 && Math.abs(ll.lng - openPopup.lng) < 0.0001) {
+          layer.setPopupContent(openPopup.content);
+          layer.openPopup();
+        }
+      }
+    });
+  }
+
+  if (points.length > 0) {
+    currentBounds = L.latLngBounds(points);
+    if (autoFit) {
+      fittingBounds = true;
+      map.invalidateSize();
+      map.fitBounds(currentBounds, {padding: [0, 0], animate: false});
+      fittingBounds = false;
+    }
+  }
+
+  const canDisable = allBands.length > 1;
+  currentBands = allBands.map(b => {
+    const dis = disabledBands.has(b);
+    const cls = dis ? ' disabled' : '';
+    const click = canDisable ? ' onclick="toggleBand(\'' + b + '\')"' : '';
+    const style = ' style="color:' + (dis ? 'var(--text3)' : (BAND_COLORS[b] || "#888")) + '"';
+    return '<span class="band-item' + cls + '"' + click + style + '>&#9679; ' + b + '</span>';
+  }).join("  ") || "";
+}
+
+function formatTime(epoch) {
+  if (!epoch) return "";
+  const d = new Date(epoch * 1000);
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return hh + ":" + mm;
+}
+
+function formatDate(epoch) {
+  if (!epoch) return "";
+  const d = new Date(epoch * 1000);
+  const months = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+  return d.getUTCDate() + " " + months[d.getUTCMonth()] + " " + d.getUTCFullYear();
+}
+
+function countryRu(callsign) {
+  if (!callsign) return "";
+  const up = callsign.toUpperCase();
+  const letters = up.replace(/[^A-Z]/g, "");
+  const pfx = letters.length >= 2 ? letters.slice(0, 2) : up.replace(/[^A-Z0-9]/g, "").slice(0, 2);
+  let iso = PREFIX_TO_ISO[pfx];
+  if (!iso && pfx.length === 2) iso = PREFIX_TO_ISO[pfx[0]];
+  return ISO_TO_RU[iso] || "";
+}
+
+const ISO_TO_RU = {
+  "ru":"Россия","ua":"Украина","by":"Беларусь","kz":"Казахстан","uz":"Узбекистан","kg":"Кыргызстан","tj":"Таджикистан","tm":"Туркменистан","az":"Азербайджан","am":"Армения","ge":"Грузия","md":"Молдова","lv":"Латвия","lt":"Литва","ee":"Эстония",
+  "us":"США","gb":"Великобритания","de":"Германия","fr":"Франция","it":"Италия","es":"Испания","pt":"Португалия","nl":"Нидерланды","be":"Бельгия","ch":"Швейцария","at":"Австрия","pl":"Польша","cz":"Чехия","sk":"Словакия","hu":"Венгрия","ro":"Румыния","bg":"Болгария","hr":"Хорватия","rs":"Сербия","si":"Словения","ba":"Босния","me":"Черногория","mk":"Македония","al":"Албания","gr":"Греция","cy":"Кипр",
+  "se":"Швеция","no":"Норвегия","fi":"Финляндия","dk":"Дания","is":"Исландия","ie":"Ирландия","lu":"Люксембург","mt":"Мальта","li":"Лихтенштейн",
+  "cn":"Китай","jp":"Япония","kr":"Южная Корея","in":"Индия","th":"Таиланд","vn":"Вьетнам","id":"Индонезия","my":"Малайзия","ph":"Филиппины","sg":"Сингапур","tw":"Тайвань","hk":"Гонконг","la":"Лаос","mm":"Мьянма","kh":"Камбоджа","bd":"Бангладеш","np":"Непал","pk":"Пакистан","lk":"Шри-Ланка",
+  "br":"Бразилия","ar":"Аргентина","cl":"Чили","co":"Колумбия","mx":"Мексика","ve":"Венесуэла","pe":"Перу","ec":"Эквадор","bo":"Боливия","py":"Парагвай","uy":"Уругвай","gy":"Гайана","sr":"Суринам","cw":"Кюрасао","aw":"Аруба",
+  "au":"Австралия","nz":"Новая Зеландия","za":"ЮАР","eg":"Египет","ng":"Нигерия","ke":"Кения","tz":"Танзания","ma":"Марокко","tn":"Тунис","dz":"Алжир","et":"Эфиопия","gh":"Гана","cm":"Камерун","ci":"Кот-д\'Ивуар","sn":"Сенегал","ml":"Мали","bf":"Буркина-Фасо","ne":"Нигер","td":"Чад","rw":"Руанда","ug":"Уганда","zm":"Замбия","zw":"Зимбабве","bw":"Ботсвана","mz":"Мозамбик","mg":"Мадагаскар","mu":"Маврикий","sc":"Сейшелы",
+  "ca":"Канада","il":"Израиль","tr":"Турция","sa":"Саудовская Аравия","ae":"ОАЭ","ir":"Иран","iq":"Ирак","lb":"Ливан","jo":"Иордания","sy":"Сирия","kw":"Кувейт","qa":"Катар","bh":"Бахрейн","om":"Оман","ye":"Йемен",
+  "cr":"Коста-Рика","pa":"Панама","ni":"Никарагуа","hn":"Гондурас","sv":"Сальвадор","gt":"Гватемала","bz":"Белиз","cu":"Куба","jm":"Ямайка","bb":"Барбадос","bs":"Багамы","dm":"Доминика","lc":"Сент-Люс","vc":"Сент-Винсент","gd":"Гренада","ag":"Антигуа и Барбуда","kn":"Сент-Китс","do":"Доминикана","ht":"Гаити",
+  "fo":"Фареры","gi":"Гибралтар","ad":"Андорра","mc":"Монако","sm":"Сан-Марино","va":"Ватикан"
+};
+
+document.querySelectorAll("th.sortable").forEach(th => {
+  th.addEventListener("click", () => {
+    const field = th.dataset.sort;
+    if (sortField === field) {
+      sortDir *= -1;
+    } else {
+      sortField = field;
+      sortDir = field === "snr" ? -1 : (field === "time" ? -1 : 1);
+    }
+    document.querySelectorAll("th.sortable").forEach(t => t.classList.remove("sort-active"));
+    th.classList.add("sort-active");
+    th.querySelector(".sort-icon").textContent = sortDir === 1 ? "↑" : "↓";
+    renderSpots();
+  });
+});
+
+function startSearch() {
+  const cs = $("callsign").value.trim().toUpperCase();
+  if (!cs) return;
+  $("callsign").value = cs;
+  localStorage.setItem("rbn-spotter-callsign", cs);
+  lastId = 0;
+  spots = {};
+  callInfo = {};
+  disabledBands = new Set();
+  polling = true;
+  autoFit = true;
+  $("status-text").textContent = "Поиск: " + cs;
+  fetchSpots();
+  clearInterval(timer);
+  timer = setInterval(fetchSpots, REFRESH_MS);
+}
+
+function stopSearch() {
+  polling = false;
+  clearInterval(timer);
+}
+
+async function fetchSpots() {
+  if (!polling) return;
+  const cs = $("callsign").value.trim().toUpperCase();
+  if (!cs) return;
+  const url = API + "?h=" + HASH + "&cde=" + encodeURIComponent(cs) + "&r=" + maxRows + "&s=" + lastId + "&ma=" + maxAgeSec;
+
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) { $("status-text").textContent = "Ошибка: " + resp.status; return; }
+    const data = await resp.json();
+    if (data.impossible || data.error) {
+      $("no-spots").style.display = "block";
+      $("no-spots").textContent = data.impossible || data.error;
+      $("spots-table").style.display = "none";
+      return;
+    }
+
+    if (data.call_info) Object.assign(callInfo, data.call_info);
+
+    if (data.spots) {
+      const ids = Object.keys(data.spots);
+      ids.forEach(id => { spots[id] = data.spots[id]; });
+      if (ids.length > 0) {
+        const maxId = Math.max(...ids.map(Number));
+        if (maxId > lastId) lastId = maxId;
+      }
+    }
+
+    renderSpots();
+  } catch (e) {
+    $("status-text").textContent = "Ошибка сети";
+  }
+}
+
+function toggleBand(band) {
+  const activeCount = allBands.filter(b => !disabledBands.has(b)).length;
+  if (disabledBands.has(band)) {
+    disabledBands.delete(band);
+  } else {
+    if (activeCount <= 1) return;
+    disabledBands.add(band);
+  }
+  renderSpots();
+}
+
+function renderSpots() {
+  const cs = $("callsign").value.trim().toUpperCase();
+  const now = Date.now() / 1000;
+
+  const spotterInfo = callInfo[cs];
+  const spotterLat = spotterInfo ? parseFloat(spotterInfo[6]) : null;
+  const spotterLon = spotterInfo ? parseFloat(spotterInfo[7]) : null;
+
+  const filtered = Object.entries(spots)
+    .filter(([id, s]) => (now - s[10]) < maxAgeSec && !disabledBands.has(freqToBand(s[1])));
+
+  filtered.forEach(([id, s]) => {
+    const info = callInfo[s[2]] || [];
+    s._dist = (spotterLat !== null && info[6]) ? haversine(spotterLat, spotterLon, parseFloat(info[6]), parseFloat(info[7])) : -1;
+    s._snr = Number(s[3]);
+  });
+
+  if (sortField === "dist") {
+    filtered.sort((a, b) => sortDir * (a[1]._dist - b[1]._dist));
+  } else if (sortField === "snr") {
+    filtered.sort((a, b) => sortDir * (a[1]._snr - b[1]._snr));
+  } else if (sortField === "time") {
+    filtered.sort((a, b) => sortDir * (Number(a[1][10]) - Number(b[1][10])));
+  } else {
+    filtered.sort((a, b) => Number(b[0]) - Number(a[0]));
+  }
+
+  if (filtered.length === 0) {
+    $("no-spots").style.display = "block";
+    $("no-spots").textContent = "Спотов от " + cs + " не найдено. Попробуйте позже.";
+    $("spots-table").style.display = "none";
+    $("status-text").textContent = "";
+    if (map && mapLayer) { updatingLayers = true; mapLayer.clearLayers(); updatingLayers = false; }
+    currentBands = "";
+    return;
+  }
+
+  $("no-spots").style.display = "none";
+  $("spots-table").style.display = "table";
+
+  const tbody = $("spots-body");
+  const frag = document.createDocumentFragment();
+
+  filtered.forEach(([id, s], idx) => {
+    const [de, freq, dx, db, wpm, time, diff, band, type, mode, epoch] = s;
+    const info = callInfo[dx] || [];
+    const distance = s._dist >= 0 ? s._dist.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, "\u2009") : "";
+
+    const tr = document.createElement("tr");
+    if (!knownIds.has(id)) tr.classList.add("spot-new");
+    const flagHtml = '<img class="flag" src="' + flagUrl(dx) + '" loading="lazy" onerror="this.style.display=\'none\'">';
+    tr.innerHTML =
+      '<td class="heard-cs col-heard">' + flagHtml + dx + "</td>" +
+      '<td class="dist col-qrb">' + distance + "</td>" +
+      '<td class="snr ' + snrClass(db) + ' col-snr">' + db + "</td>" +
+      '<td class="time col-time">' + formatTime(epoch) + "</td>" +
+      '<td class="freq col-freq">' + freq + "</td>";
+    frag.appendChild(tr);
+  });
+
+  tbody.innerHTML = "";
+  tbody.appendChild(frag);
+  knownIds = new Set(filtered.map(([id]) => id));
+  updateMap();
+  $("status-text").innerHTML = (currentBands ? currentBands + " | " : "") + "Обновлено: " + new Date().toLocaleTimeString("ru-RU") + " Спотов: " + filtered.length;
+}
+
+let composing = false;
+$("callsign").addEventListener("compositionstart", () => { composing = true; });
+$("callsign").addEventListener("compositionend", () => {
+  composing = false;
+  $("callsign").value = $("callsign").value.toUpperCase();
+});
+$("callsign").addEventListener("keydown", e => {
+  if (e.key === "Enter") startSearch();
+  if (!composing) $("callsign").value = $("callsign").value.toUpperCase();
+});
+
+$("theme-switch").addEventListener("change", (e) => {
+  applyTheme(e.target.checked ? "light" : "dark");
+});
+
+$("time-range").addEventListener("change", (e) => {
+  maxAgeSec = Number(e.target.value);
+  if (polling) { lastId = 0; spots = {}; fetchSpots(); }
+});
+
+applyTheme(currentTheme);
+
+const savedCallsign = localStorage.getItem("rbn-spotter-callsign");
+if (savedCallsign) {
+  $("callsign").value = savedCallsign;
+  setTimeout(() => startSearch(), 200);
+}
+
+setTimeout(() => initMap(), 100);
+</script>
+
+</body>
+</html>
