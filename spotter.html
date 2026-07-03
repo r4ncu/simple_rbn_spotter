@@ -225,9 +225,9 @@ function snrClass(db) {
 
 function callsignPrefix(callsign) {
   const up = callsign.toUpperCase();
-  const m = up.match(/^(\d?[A-Z]+)/);
+  const m = up.match(/^(\d[A-Z]|[A-Z]\d|[A-Z]{2})/);
   if (!m) return up.replace(/[^A-Z0-9]/g, "").slice(0, 2);
-  return m[1].slice(0, 2);
+  return m[1];
 }
 
 function flagUrl(callsign) {
