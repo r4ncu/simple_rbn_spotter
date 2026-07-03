@@ -8,13 +8,28 @@ import time
 import threading
 import urllib.parse
 
+import json
 import os
+import re
 PORT = int(os.environ.get("PORT", 8080))
 RBN_HOST = "reversebeacon.net"
+HASH_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rbn_hash.txt")
 
 ssl_ctx = ssl.create_default_context()
 ssl_ctx.check_hostname = False
 ssl_ctx.verify_mode = ssl.CERT_NONE
+
+def load_hash():
+    try:
+        return open(HASH_FILE).read().strip()
+    except FileNotFoundError:
+        return "ab6db5"
+
+def save_hash(h):
+    with open(HASH_FILE, "w") as f:
+        f.write(h)
+
+current_hash = load_hash()
 
 class PersistentRBN:
     def __init__(self):
@@ -58,6 +73,8 @@ class PersistentRBN:
                     with self._cache_lock:
                         self._cache[cache_key] = (time.time(), data)
                     return data
+                elif resp.status == 400:
+                    return data
                 else:
                     self._conn = None
                     return None
@@ -82,12 +99,31 @@ class ProxyHandler(http.server.SimpleHTTPRequestHandler):
         super().end_headers()
 
     def do_GET(self):
-        if self.path.startswith("/api/spots"):
+        global current_hash
+        if self.path.startswith("/api/hash"):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(json.dumps({"hash": current_hash}).encode())
+        elif self.path.startswith("/api/spots"):
             qs = self.path[len("/api/spots"):]
             path = "/spots.php" + qs
             print(f"[PROXY] {path}")
             sys.stdout.flush()
             data = rbn.get(path)
+            if data:
+                try:
+                    j = json.loads(data)
+                    if j.get("error") == 888 and j.get("ver_h"):
+                        new_h = j["ver_h"]
+                        current_hash = new_h
+                        save_hash(new_h)
+                        print(f"[HASH] refreshed -> {new_h}", flush=True)
+                        path = "/spots.php" + re.sub(r'h=[^&]+', 'h=' + new_h, qs, count=1)
+                        data = rbn.get(path)
+                except (json.JSONDecodeError, KeyError):
+                    pass
             if data:
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")

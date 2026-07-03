@@ -151,7 +151,7 @@ tr.spot-new td{animation:spot-highlight 4s ease-out}
 
 <script>
 const API = "/api/spots";
-const HASH = "7fb810";
+let HASH = "";
 const REFRESH_MS = 5000;
 
 let polling = false;
@@ -534,12 +534,30 @@ async function fetchSpots() {
   if (!polling) return;
   const cs = $("callsign").value.trim().toUpperCase();
   if (!cs) return;
+  if (!HASH) {
+    try {
+      const hr = await fetch("/api/hash");
+      const hd = await hr.json();
+      HASH = hd.hash;
+    } catch(e) {}
+  }
   const url = API + "?h=" + HASH + "&cde=" + encodeURIComponent(cs) + "&r=" + maxRows + "&s=" + lastId + "&ma=" + maxAgeSec;
 
   try {
     const resp = await fetch(url);
     if (!resp.ok) { $("status-text").textContent = "Ошибка: " + resp.status; return; }
     const data = await resp.json();
+    if (data.error === 888) {
+      try {
+        const hr = await fetch("/api/hash");
+        const hd = await hr.json();
+        HASH = hd.hash;
+        const retry = await fetch(API + "?h=" + HASH + "&cde=" + encodeURIComponent(cs) + "&r=" + maxRows + "&s=" + lastId + "&ma=" + maxAgeSec);
+        if (retry.ok) { const rd = await retry.json(); processSpots(rd); return; }
+      } catch(e2) {}
+      $("status-text").textContent = "Ошибка хеша, попробуйте обновить страницу";
+      return;
+    }
     if (data.impossible || data.error) {
       $("no-spots").style.display = "block";
       $("no-spots").textContent = data.impossible || data.error;
@@ -547,6 +565,13 @@ async function fetchSpots() {
       return;
     }
 
+    processSpots(data);
+  } catch (e) {
+    $("status-text").textContent = "Ошибка сети";
+  }
+}
+
+function processSpots(data) {
     if (data.call_info) Object.assign(callInfo, data.call_info);
 
     if (data.spots) {
@@ -559,9 +584,6 @@ async function fetchSpots() {
     }
 
     renderSpots();
-  } catch (e) {
-    $("status-text").textContent = "Ошибка сети";
-  }
 }
 
 function toggleBand(band) {
@@ -663,6 +685,8 @@ $("time-range").addEventListener("change", (e) => {
 });
 
 applyTheme(currentTheme);
+
+fetch("/api/hash").then(r => r.json()).then(d => { HASH = d.hash; }).catch(() => {});
 
 const savedCallsign = localStorage.getItem("rbn-spotter-callsign");
 if (savedCallsign) {
